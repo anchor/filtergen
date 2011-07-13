@@ -17,6 +17,11 @@
 /rules.filter
 /scanner.c
 /stamp-h1
+/t/convert
+/t/emit
+/t/factorise
+/t/parse
+/t/scan
 /ylwrap
 .deps/
 Makefile
