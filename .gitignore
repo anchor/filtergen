@@ -8,6 +8,7 @@
 /depcomp
 /fgadm
 /fgadm.conf
+/filtergen
 /filtergen.spec
 /install-sh
 /missing
