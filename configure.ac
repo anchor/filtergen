@@ -1,13 +1,13 @@
 AC_PREREQ(2.50)
 
 AC_INIT(filtergen, 0.12.4, jaq@spacepants.org)
-AM_INIT_AUTOMAKE([foreign dist-bzip2])
 
 AC_CONFIG_AUX_DIR(.)
 AC_CONFIG_SRCDIR(filtergen.c)
-AM_CONFIG_HEADER(config.h)
 
-AM_MAINTAINER_MODE
+AM_INIT_AUTOMAKE([foreign dist-bzip2])
+AM_MAINTAINER_MODE([enable])
+AM_CONFIG_HEADER(config.h)
 
 AC_SUBST(PROGRAM)
 AC_SUBST(VERSION)
