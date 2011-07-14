@@ -123,6 +123,7 @@ extern int yylex(void);
 %token TOK_ERR
 %token TOK_BANG
 %token TOK_COLON
+%token TOK_SPLAT
 %{
 int yyprint(FILE * f, int t, YYSTYPE v);
 %}
@@ -269,6 +270,13 @@ direction_argument_list_: /* empty */
 		$$ = malloc(sizeof(struct direction_argument_list_s));
 		$$->list = $1;
 		$$->arg = $2;
+	}
+	;
+
+direction_argument: TOK_SPLAT
+	{
+		$$ = malloc(sizeof(struct direction_argument_s));
+		$$->direction = strdup("*");
 	}
 	;
 
