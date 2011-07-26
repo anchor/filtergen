@@ -82,7 +82,7 @@ int main(int argc __attribute__((unused)), char ** argv __attribute__((unused)))
 
     /* if running in make distcheck the cwd isn't the same as the srcdir */
     if (getenv("srcdir")) {
-	chdir(getenv("srcdir"));
+	if (chdir(getenv("srcdir"))) { /* whatever */ }
     }
 
     while ((c = yylex())) {
