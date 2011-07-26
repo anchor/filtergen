@@ -21,6 +21,7 @@
 
 #include <arpa/inet.h>
 
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -136,7 +137,7 @@ struct filter *new_filter_device(enum filtertype type, const char *iface)
 }
 
 
-struct filter *new_filter_host(enum filtertype type, const char *matchstr)
+struct filter *new_filter_host(enum filtertype type, const char *matchstr, sa_family_t family)
 {
     struct filter *f;
     char *mask;
@@ -144,33 +145,74 @@ struct filter *new_filter_host(enum filtertype type, const char *matchstr)
 
     if (!(f = __new_filter(type))) return f;
 
+    f->u.addrs.family = family;
     f->u.addrs.addrstr = strdup(matchstr);
     if((mask = strchr(f->u.addrs.addrstr, '/'))) {
 	*mask++ = 0;
-	if(!str_to_int(mask, &i)) {
-	    /* Netmask like foo/24 */
-	    uint32_t l = 0xffffffff;
-	    if(i < 0 || i > 32) {
+	switch (family) {
+	case AF_INET:
+	    if(!str_to_int(mask, &i)) {
+		/* Netmask like foo/24 */
+		uint32_t l = 0xffffffff;
+		if(i < 0 || i > 32) {
+		    fprintf(stderr, "can't parse netmask \"%s\"\n",
+			    mask);
+		    return NULL;
+		}
+		if(!i)
+		    l = 0;
+		else {
+		    i = 32 - i;
+		    l >>= i; l <<= i;
+		}
+		f->u.addrs.u.inet.mask.s_addr = htonl(l);
+	    } else {
+		/* Better be a /255.255.255.0 mask */
+		if(!inet_aton(mask, &f->u.addrs.u.inet.mask)) {
+		    fprintf(stderr, "can't parse netmask \"%s\"\n",
+			    mask);
+		    return NULL;
+		}
+	    }
+	    f->u.addrs.maskstr = strdup(inet_ntoa(f->u.addrs.u.inet.mask));
+	    break;
+	case AF_INET6:
+	    if(!str_to_int(mask, &i)) {
+		/* Netmask like foo/128 */
+		unsigned char l[16] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+					0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+		unsigned char *p = l + 15;
+		int o;
+		if(i < 0 || i > 128) {
+		    fprintf(stderr, "can't parse netmask \"%s\"\n",
+			    mask);
+		    return NULL;
+		}
+		if (i != 0) {
+		    o = 128 - i;
+		    while (o > 8) {
+			*p = 0x00;
+			o -= 8;
+		    }
+		    if(!i)
+			*p = 0x00;
+		    else {
+			*p >>= o; *p <<= o;
+		    }
+		}
+		memcpy(f->u.addrs.u.inet6.mask.s6_addr, l, sizeof l);
+		f->u.addrs.maskstr = int_to_str_dup(i);
+	    } else {
 		fprintf(stderr, "can't parse netmask \"%s\"\n",
 			mask);
 		return NULL;
 	    }
-	    if(!i)
-		l = 0;
-	    else {
-		i = 32 - i;
-		l >>= i; l <<= i;
-	    }
-	    f->u.addrs.mask.s_addr = htonl(l);
-	} else {
-	    /* Better be a /255.255.255.0 mask */
-	    if(!inet_aton(mask, &f->u.addrs.mask)) {
-		fprintf(stderr, "can't parse netmask \"%s\"\n",
-			mask);
-		return NULL;
-	    }
+	    break;
+	default:
+	    fprintf(stderr, "can't parse netmask \"%s\" for unknown address family\n",
+		    mask);
+	    return NULL;
 	}
-	f->u.addrs.maskstr = strdup(inet_ntoa(f->u.addrs.mask));
     }
 
     return f;
@@ -431,15 +473,19 @@ void filter_apply_flags(struct filter *f, long flags)
       case F_SOURCE: case F_DEST:
 	if(flags & FF_LOOKUP) {
 	    struct addr_spec *a = &f->u.addrs;
-	    struct hostent *h;
-	    if(!(inet_aton(a->addrstr, &f->u.addrs.addr))) {
-		/* Not already in IP format */
-		if(!(h = gethostbyname(a->addrstr))) {
-		    fprintf(stderr, "warning: can't lookup name \"%s\"\n", a->addrstr);
-		} else {
-		    free(a->addrstr);
-		    a->addrstr = strdup(h->h_addr_list[0]);
+	    struct addrinfo hints;
+	    struct addrinfo *info = NULL;
+	    memset(&hints, 0, sizeof(struct addrinfo));
+	    hints.ai_family = a->family;
+	    if(getaddrinfo(a->addrstr, NULL, &hints, &info)==0) {
+		free(a->addrstr);
+		a->addrstr = malloc(NI_MAXHOST + 1);
+		if (getnameinfo(info->ai_addr, info->ai_addrlen, a->addrstr, NI_MAXHOST, NULL, 0, NI_NUMERICHOST)) {
+		    fprintf(stderr, "warning: can't stringify IP: %s\n", strerror(errno));
 		}
+		freeaddrinfo(info);
+	    } else {
+		fprintf(stderr, "warning: can't lookup name \"%s\"\n", a->addrstr);
 	    }
 	}
 	break;

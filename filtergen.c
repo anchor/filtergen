@@ -39,7 +39,7 @@
 
 int yyparse(void *);
 void yyrestart(FILE *);
-extern struct filter * convert(struct ast_s * n);
+extern struct filter * convert(struct ast_s * n, struct filtergen_opts * o);
 
 static FILE *outfile;
 
@@ -107,15 +107,18 @@ int oprintf(const char *fmt, ...)
 
 struct filtyp {
     const char * name;
+    sa_family_t family;
     filtergen * compiler;
     filter_flush * flusher;
 } filter_types[] = {
-    { "iptables", fg_iptables, flush_iptables, },
-    { "iptables-restore", fg_iptrestore, flush_iptrestore, },
-    { "ipchains", fg_ipchains, flush_ipchains, },
-    { "ipfilter", fg_ipfilter, NULL },
-    { "cisco", fg_cisco, NULL },
-    { NULL, NULL, NULL },
+    { "iptables", AF_INET, fg_iptables, flush_iptables },
+    { "ip6tables", AF_INET6, fg_ip6tables, flush_ip6tables },
+    { "iptables-restore", AF_INET, fg_iptrestore, flush_iptrestore },
+    { "ip6tables-restore", AF_INET6, fg_ip6trestore, flush_ip6trestore },
+    { "ipchains", AF_INET, fg_ipchains, flush_ipchains },
+    { "ipfilter", AF_INET, fg_ipfilter, NULL },
+    { "cisco", AF_INET, fg_cisco, NULL },
+    { NULL, 0, NULL, NULL },
 };
 
 #ifdef HAVE_GETOPT_H
@@ -229,9 +232,13 @@ int main(int argc, char **argv) {
 	{
 	    struct ast_s ast;
 
-	    if (yyparse((void *) &ast) == 0) {
-		resolve(&ast);
-		f = convert(&ast);
+	    if (yyparse(&ast) == 0) {
+		struct filtergen_opts o;
+		memset(&o, 0, sizeof o);
+		o.family = ft->family;
+
+		resolve(&ast, &o);
+		f = convert(&ast, &o);
 		if (!f) {
 		    fprintf(stderr, "couldn't convert file\n");
 		    return 1;
