@@ -357,7 +357,7 @@ static int cb_ip6tables_group(const char *name)
 static int fg_iptables_common(struct filter *filter, int flags, sa_family_t family, const char *iptables)
 {
     long feat = 0;
-    int r;
+    int r = 0;
     struct fg_misc misc = { flags, &feat };
     fg_callback cb_iptables = {
 	rule:	family == AF_INET ? cb_iptables_rule : cb_ip6tables_rule,
